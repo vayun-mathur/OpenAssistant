@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -229,8 +230,12 @@ fun ConversationScreen(
         }
     }
 
-    fun send() {
-        if (userInput.isNotBlank() && activeConversation != null) {
+    suspend fun send() {
+        if (userInput.isNotBlank()) {
+            if(activeConversation == null) {
+                viewModel.createNewConversation()
+            }
+            delay(500)
             val imageBase64s = selectedImageUris.value.map { uri ->
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
@@ -263,51 +268,31 @@ fun ConversationScreen(
             }
         )
     }
-
-    ModalNavigationDrawer(
-        modifier = Modifier.imePadding(),
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text("Conversations", modifier = Modifier.padding(16.dp))
-                HorizontalDivider()
-                LazyColumn {
-                    items(conversations) { conversation ->
-                        NavigationDrawerItem(
-                            label = { Text(conversation.title) },
-                            selected = activeConversation?.id == conversation.id,
-                            onClick = {
-                                viewModel.setActiveConversation(conversation)
-                                coroutineScope.launch { drawerState.close() }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    ) {
+    val mainContent = @Composable { showMenu: Boolean ->
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(activeConversation?.title ?: "OpenAssistant") },
+                    title = { Text(activeConversation?.title ?: "New Conversation") },
                     navigationIcon = {
-                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                            Icon(
-                                painterResource(R.drawable.baseline_menu_24),
-                                contentDescription = "Menu"
-                            )
+                        if(showMenu) {
+                            IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                                Icon(
+                                    painterResource(R.drawable.baseline_menu_24),
+                                    contentDescription = "Menu"
+                                )
+                            }
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
-                            viewModel.createNewConversation()
-                        }) {
-                            Icon(
-                                painterResource(R.drawable.baseline_add_24),
-                                contentDescription = "New Conversation"
-                            )
-                        }
                         activeConversation?.let {
+                            IconButton(onClick = {
+                                viewModel.setActiveConversation(null)
+                            }) {
+                                Icon(
+                                    painterResource(R.drawable.baseline_add_24),
+                                    contentDescription = "New Conversation"
+                                )
+                            }
                             IconButton(onClick = { viewModel.deleteConversation(it) }) {
                                 Icon(
                                     painterResource(R.drawable.baseline_delete_24),
@@ -327,7 +312,6 @@ fun ConversationScreen(
             bottomBar = {
                 BottomAppBar {
                     Column {
-
                         OutlinedTextField(
                             userInput,
                             { userInput = it },
@@ -335,7 +319,9 @@ fun ConversationScreen(
                             label = { Text("Ask Grok...") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { send() }),
+                            keyboardActions = KeyboardActions(onSend = {
+                                coroutineScope.launch{send()}
+                            }),
                             leadingIcon = {
                                 IconButton(onClick = { imageLauncher.launch("image/*") }) {
                                     Icon(
@@ -346,7 +332,7 @@ fun ConversationScreen(
                             },
                             trailingIcon = {
                                 IconButton({
-                                    send()
+                                    coroutineScope.launch{send()}
                                 }) {
                                     Icon(
                                         painterResource(R.drawable.outline_send_24),
@@ -471,6 +457,35 @@ fun ConversationScreen(
                     }
                 }
             }
+        }
+    }
+    Box(Modifier.imePadding()) {
+        if (conversations.isNotEmpty()) {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet {
+                        Text("Conversations", modifier = Modifier.padding(16.dp))
+                        HorizontalDivider()
+                        LazyColumn {
+                            items(conversations) { conversation ->
+                                NavigationDrawerItem(
+                                    label = { Text(conversation.title) },
+                                    selected = activeConversation?.id == conversation.id,
+                                    onClick = {
+                                        viewModel.setActiveConversation(conversation)
+                                        coroutineScope.launch { drawerState.close() }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            ) {
+                mainContent(true)
+            }
+        } else {
+            mainContent(false)
         }
     }
 }

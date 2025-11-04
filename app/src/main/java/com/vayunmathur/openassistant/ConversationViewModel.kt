@@ -29,16 +29,15 @@ class ConversationViewModel(private val conversationDao: ConversationDao, privat
             conversationDao.getAllConversations().collect { conversationList ->
                 if (conversationList.isNotEmpty() && _activeConversation.value == null) {
                     setActiveConversation(conversationList.first())
-                } else if (conversationList.isEmpty()) {
-                    createNewConversation()
                 }
             }
         }
     }
 
-    fun setActiveConversation(conversation: Conversation) {
+    fun setActiveConversation(conversation: Conversation?) {
         _activeConversation.value = conversation
         _messages.value = emptyList()
+        if(conversation == null) return
         viewModelScope.launch {
             messageDao.getMessagesForConversation(conversation.id).collect {
                 _messages.value = it
@@ -61,9 +60,8 @@ class ConversationViewModel(private val conversationDao: ConversationDao, privat
                 _activeConversation.value = null
                 _messages.value = emptyList()
 
-                // Optionally, set another conversation as active or create a new one
+                // Optionally, set another conversation as active
                 conversations.value.firstOrNull{it.id != conversation.id}?.let { setActiveConversation(it) }
-                    ?: createNewConversation()
             }
             messageDao.deleteMessagesForConversation(conversation.id)
         }
