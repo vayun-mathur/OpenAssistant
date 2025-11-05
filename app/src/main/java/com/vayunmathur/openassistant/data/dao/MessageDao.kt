@@ -1,7 +1,6 @@
 package com.vayunmathur.openassistant.data.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Upsert
 import com.vayunmathur.openassistant.data.Message

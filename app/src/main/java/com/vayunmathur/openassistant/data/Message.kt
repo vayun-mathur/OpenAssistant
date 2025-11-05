@@ -5,13 +5,11 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
-import com.vayunmathur.openassistant.ContentPart
 import com.vayunmathur.openassistant.GrokRequest
 import com.vayunmathur.openassistant.ImageUrl
 import com.vayunmathur.openassistant.ImageUrlContent
 import com.vayunmathur.openassistant.TextContent
 import com.vayunmathur.openassistant.ToolCall
-import kotlinx.serialization.SerialName
 
 @Entity(
     tableName = "messages",

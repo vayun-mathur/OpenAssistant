@@ -1,16 +1,8 @@
 package com.vayunmathur.openassistant.data
 
 import androidx.room.TypeConverter
-import com.vayunmathur.openassistant.ContentPart
-import com.vayunmathur.openassistant.ImageUrlContent
-import com.vayunmathur.openassistant.TextContent
 import com.vayunmathur.openassistant.ToolCall
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.polymorphic
-import kotlinx.serialization.modules.subclass
 
 class Converters {
 

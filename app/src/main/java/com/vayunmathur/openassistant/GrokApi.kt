@@ -1,7 +1,6 @@
 package com.vayunmathur.openassistant
 
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
@@ -35,7 +34,7 @@ class GrokApi(private val apiKey: String) {
         }
     }
 
-    class GrokException(val errorNum: Int, val body: String): Exception("Error $errorNum: $body")
+    class GrokException(val errorNum: Int, body: String): Exception("Error $errorNum: $body")
 
     fun getGrokCompletionStream(request: GrokRequest): Flow<GrokChunk> = flow {
         val response = client.post("https://api.x.ai/v1/chat/completions") {

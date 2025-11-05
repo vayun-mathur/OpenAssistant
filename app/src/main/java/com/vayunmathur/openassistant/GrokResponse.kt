@@ -4,36 +4,6 @@ package com.vayunmathur.openassistant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-@Serializable
-data class GrokResponse(
-    val id: String,
-    val `object`: String,
-    val created: Long,
-    val model: String,
-    val choices: List<Choice>,
-    val usage: Usage
-)
-
-@Serializable
-data class Choice(
-    val index: Int,
-    val message: ResponseMessage,
-    val finish_reason: String
-)
-
-@Serializable
-data class ResponseMessage(
-    val role: String,
-    val content: String
-)
-
-@Serializable
-data class Usage(
-    val prompt_tokens: Int,
-    val completion_tokens: Int,
-    val total_tokens: Int,
-)
-
 // For streaming
 @Serializable
 data class GrokChunk(

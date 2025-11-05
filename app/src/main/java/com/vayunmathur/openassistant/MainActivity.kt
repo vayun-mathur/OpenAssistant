@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +41,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -78,7 +78,6 @@ import com.vayunmathur.openassistant.ui.theme.OpenAssistantTheme
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 import kotlin.random.Random
@@ -162,7 +161,6 @@ fun ConversationScreen(
             temperature = 0.7,
             tools = Tools.API_TOOLS
         )
-        println(Json { prettyPrint = true }.encodeToString(request))
         if (userMessage != null)
             viewModel.insertMessage(userMessage)
 
@@ -406,7 +404,7 @@ fun ConversationScreen(
                                         horizontalArrangement = Arrangement.Start
                                     ) {
                                         Column(modifier = Modifier.padding(end = 64.dp)) {
-                                            MarkdownText(markdown = message.textContent, color = MaterialTheme.colorScheme.onBackground)
+                                            MarkdownText(markdown = message.textContent, style = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onBackground))
                                         }
                                     }
                                 }
