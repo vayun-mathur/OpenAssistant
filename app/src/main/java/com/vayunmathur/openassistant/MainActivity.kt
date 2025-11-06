@@ -178,7 +178,11 @@ fun ConversationScreen(
         var usedTools = false
 
         try {
-            grokApi.getGrokCompletionStream(request).collect { chunk ->
+            grokApi.getGrokCompletionStream(request) {
+                coroutineScope.launch {
+                    Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                }
+            }.collect { chunk ->
                 val delta = chunk.choices.first().delta
                 delta.toolCalls?.forEach {
                     usedTools = true

@@ -36,26 +36,30 @@ class GrokApi(private val apiKey: String) {
 
     class GrokException(val errorNum: Int, body: String): Exception("Error $errorNum: $body")
 
-    fun getGrokCompletionStream(request: GrokRequest): Flow<GrokChunk> = flow {
-        val response = client.post("https://api.x.ai/v1/chat/completions") {
-            header(HttpHeaders.Authorization, "Bearer $apiKey")
-            contentType(ContentType.Application.Json)
-            setBody(request.copy(model = "grok-4-fast-reasoning", stream = true))
-        }
+    fun getGrokCompletionStream(request: GrokRequest, showToast: (String) -> Unit): Flow<GrokChunk> = flow {
+        try {
+            val response = client.post("https://api.x.ai/v1/chat/completions") {
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                contentType(ContentType.Application.Json)
+                setBody(request.copy(model = "grok-4-fast-reasoning", stream = true))
+            }
 
-        if(!response.status.isSuccess()) {
-            throw GrokException(response.status.value, response.bodyAsText())
-        }
+            if (!response.status.isSuccess()) {
+                throw GrokException(response.status.value, response.bodyAsText())
+            }
 
-        val channel = response.bodyAsChannel()
-        while (!channel.isClosedForRead) {
-            val line = channel.readUTF8Line()
-            if (line?.startsWith("data: ") == true) {
-                val jsonString = line.substring(6)
-                if (jsonString != "[DONE]") {
-                    emit(json.decodeFromString<GrokChunk>(jsonString))
+            val channel = response.bodyAsChannel()
+            while (!channel.isClosedForRead) {
+                val line = channel.readUTF8Line()
+                if (line?.startsWith("data: ") == true) {
+                    val jsonString = line.substring(6)
+                    if (jsonString != "[DONE]") {
+                        emit(json.decodeFromString<GrokChunk>(jsonString))
+                    }
                 }
             }
+        } catch(_: Exception) {
+            showToast("Unable to connect")
         }
     }
 }
