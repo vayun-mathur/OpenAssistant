@@ -11,7 +11,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,7 +54,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,9 +68,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.vayunmathur.openassistant.data.Conversation
 import com.vayunmathur.openassistant.data.Message
 import com.vayunmathur.openassistant.data.MessageDatabase
 import com.vayunmathur.openassistant.data.Tools
+import com.vayunmathur.openassistant.data.dao.ConversationDao
+import com.vayunmathur.openassistant.data.dao.MessageDao
 import com.vayunmathur.openassistant.data.toGrokMessage
 import com.vayunmathur.openassistant.ui.theme.OpenAssistantTheme
 import dev.jeziellago.compose.markdowntext.MarkdownText
@@ -92,10 +93,6 @@ class MainActivity : ComponentActivity() {
         val messageDao = database.messageDao()
         val conversationDao = database.conversationDao()
 
-        val viewModel: ConversationViewModel by viewModels {
-            ConversationViewModelFactory(conversationDao, messageDao)
-        }
-
         setContent {
             OpenAssistantTheme {
                 val context = LocalContext.current
@@ -105,7 +102,8 @@ class MainActivity : ComponentActivity() {
 
                 ConversationScreen(
                     grokApi = grokApi,
-                    viewModel = viewModel,
+                    conversationDao = conversationDao,
+                    messageDao = messageDao,
                     onApiKeyChanged = { newApiKey ->
                         settingsManager.apiKey = newApiKey
                         apiKey = newApiKey
@@ -121,22 +119,44 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ConversationScreen(
     grokApi: GrokApi,
-    viewModel: ConversationViewModel,
+    conversationDao: ConversationDao,
+    messageDao: MessageDao,
     onApiKeyChanged: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val conversations by viewModel.conversations.collectAsState()
-    val activeConversation by viewModel.activeConversation.collectAsState()
-    val messages by viewModel.messages.collectAsState()
-    val visibleMessages by remember {
+    val coroutineScope = rememberCoroutineScope()
+
+    var conversations by remember { mutableStateOf(emptyList<Conversation>()) }
+    var activeConversation by remember { mutableStateOf<Conversation?>(null) }
+    var messages by remember { mutableStateOf(emptyList<Message>()) }
+
+    LaunchedEffect(Unit) {
+        conversationDao.getAllConversations().collect { conversationList ->
+            conversations = conversationList
+            if (activeConversation == null && conversationList.isNotEmpty()) {
+                activeConversation = conversationList.first()
+            }
+        }
+    }
+
+    LaunchedEffect(activeConversation) {
+        if (activeConversation != null) {
+            messageDao.getMessagesForConversation(activeConversation!!.id).collect {
+                messages = it
+            }
+        } else {
+            messages = emptyList()
+        }
+    }
+
+    val visibleMessages by remember(messages, activeConversation) {
         derivedStateOf {
-            messages.filter { it.textContent.isNotBlank() }
+            messages.filter { it.textContent.isNotBlank() && it.conversationId == activeConversation?.id }
         }
     }
 
     var userInput by remember { mutableStateOf("") }
     var isThinking by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showApiKeyDialog by remember { mutableStateOf(false) }
     val selectedImageUris = remember { mutableStateOf<List<Uri>>(emptyList()) }
@@ -146,6 +166,29 @@ fun ConversationScreen(
         selectedImageUris.value = uris
     }
     val lazyListState = rememberLazyListState()
+
+    fun insertMessage(message: Message) {
+        coroutineScope.launch {
+            messageDao.insertMessage(message)
+        }
+    }
+
+    suspend fun createNewConversation() {
+        val newConversation = Conversation(title = "Conv #${conversations.size + 1}")
+        val id = conversationDao.insert(newConversation)
+        activeConversation = newConversation.copy(id = id)
+    }
+
+    fun deleteConversation(conversation: Conversation) {
+        coroutineScope.launch {
+            val wasActive = activeConversation?.id == conversation.id
+            messageDao.deleteMessagesForConversation(conversation.id)
+            conversationDao.delete(conversation)
+            if (wasActive) {
+                activeConversation = conversations.firstOrNull { it.id != conversation.id }
+            }
+        }
+    }
 
     LaunchedEffect(visibleMessages.size) {
         lazyListState.animateScrollToItem(if (visibleMessages.isEmpty()) 0 else visibleMessages.size - 1)
@@ -162,7 +205,7 @@ fun ConversationScreen(
             tools = Tools.API_TOOLS
         )
         if (userMessage != null)
-            viewModel.insertMessage(userMessage)
+            insertMessage(userMessage)
 
         var assistantMessage = Message(
             id = Random.nextInt(),
@@ -172,7 +215,7 @@ fun ConversationScreen(
             images = emptyList(),
             toolCalls = listOf()
         )
-        viewModel.insertMessage(assistantMessage)
+        insertMessage(assistantMessage)
 
         var fullResponse = ""
         var usedTools = false
@@ -195,16 +238,16 @@ fun ConversationScreen(
                             images = emptyList(),
                             toolCallId = it.id,
                         )
-                        viewModel.insertMessage(message)
+                        insertMessage(message)
                     }
                     assistantMessage =
                         assistantMessage.copy(toolCalls = assistantMessage.toolCalls + it)
-                    viewModel.insertMessage(assistantMessage)
+                    insertMessage(assistantMessage)
                 }
                 delta.content?.let {
                     fullResponse += it
                     assistantMessage = assistantMessage.copy(textContent = fullResponse)
-                    viewModel.insertMessage(assistantMessage) // This will be an upsert
+                    insertMessage(assistantMessage) // This will be an upsert
                 }
             }
         } catch (e: GrokApi.GrokException) {
@@ -234,10 +277,10 @@ fun ConversationScreen(
 
     suspend fun send() {
         if (userInput.isNotBlank()) {
-            if(activeConversation == null) {
-                viewModel.createNewConversation()
+            if (activeConversation == null) {
+                createNewConversation()
+                delay(500)
             }
-            delay(500)
             val imageBase64s = selectedImageUris.value.map { uri ->
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
@@ -276,7 +319,7 @@ fun ConversationScreen(
                 TopAppBar(
                     title = { Text(activeConversation?.title ?: "New Conversation") },
                     navigationIcon = {
-                        if(showMenu) {
+                        if (showMenu) {
                             IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
                                 Icon(
                                     painterResource(R.drawable.baseline_menu_24),
@@ -288,14 +331,14 @@ fun ConversationScreen(
                     actions = {
                         activeConversation?.let {
                             IconButton(onClick = {
-                                viewModel.setActiveConversation(null)
+                                activeConversation = null
                             }) {
                                 Icon(
                                     painterResource(R.drawable.baseline_add_24),
                                     contentDescription = "New Conversation"
                                 )
                             }
-                            IconButton(onClick = { viewModel.deleteConversation(it) }) {
+                            IconButton(onClick = { deleteConversation(it) }) {
                                 Icon(
                                     painterResource(R.drawable.baseline_delete_24),
                                     contentDescription = "Delete Conversation"
@@ -322,7 +365,7 @@ fun ConversationScreen(
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = {
-                                coroutineScope.launch{send()}
+                                coroutineScope.launch { send() }
                             }),
                             leadingIcon = {
                                 IconButton(onClick = { imageLauncher.launch("image/*") }) {
@@ -334,7 +377,7 @@ fun ConversationScreen(
                             },
                             trailingIcon = {
                                 IconButton({
-                                    coroutineScope.launch{send()}
+                                    coroutineScope.launch { send() }
                                 }) {
                                     Icon(
                                         painterResource(R.drawable.outline_send_24),
@@ -387,12 +430,27 @@ fun ConversationScreen(
                                                     Spacer(modifier = Modifier.height(8.dp))
                                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         items(message.images) { base64 ->
-                                                            val imageBytes = Base64.decode(base64, Base64.DEFAULT)
-                                                            val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                                                            val imageBytes =
+                                                                Base64.decode(
+                                                                    base64,
+                                                                    Base64.DEFAULT
+                                                                )
+                                                            val bitmap =
+                                                                BitmapFactory.decodeByteArray(
+                                                                    imageBytes,
+                                                                    0,
+                                                                    imageBytes.size
+                                                                )
                                                             Image(
                                                                 bitmap = bitmap.asImageBitmap(),
                                                                 contentDescription = null,
-                                                                modifier = Modifier.size(128.dp).clip(RoundedCornerShape(8.dp))
+                                                                modifier = Modifier
+                                                                    .size(128.dp)
+                                                                    .clip(
+                                                                        RoundedCornerShape(
+                                                                            8.dp
+                                                                        )
+                                                                    )
                                                             )
                                                         }
                                                     }
@@ -408,7 +466,10 @@ fun ConversationScreen(
                                         horizontalArrangement = Arrangement.Start
                                     ) {
                                         Column(modifier = Modifier.padding(end = 64.dp)) {
-                                            MarkdownText(markdown = message.textContent, style = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onBackground))
+                                            MarkdownText(
+                                                markdown = message.textContent,
+                                                style = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onBackground)
+                                            )
                                         }
                                     }
                                 }
@@ -417,7 +478,9 @@ fun ConversationScreen(
                         if (isThinking) {
                             item {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(end = 64.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(end = 64.dp),
                                     horizontalArrangement = Arrangement.Start,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -446,7 +509,8 @@ fun ConversationScreen(
                                 },
                                 trailingIcon = {
                                     IconButton(onClick = {
-                                        selectedImageUris.value = selectedImageUris.value - uri
+                                        selectedImageUris.value =
+                                            selectedImageUris.value - uri
                                     }) {
                                         Icon(
                                             painterResource(id = R.drawable.baseline_close_24),
@@ -475,7 +539,7 @@ fun ConversationScreen(
                                     label = { Text(conversation.title) },
                                     selected = activeConversation?.id == conversation.id,
                                     onClick = {
-                                        viewModel.setActiveConversation(conversation)
+                                        activeConversation = conversation
                                         coroutineScope.launch { drawerState.close() }
                                     }
                                 )
