@@ -27,6 +27,7 @@ data class Message(
     val conversationId: Long, // Foreign key to Conversation
     val role: String,
     val textContent: String,
+    val displayContent: String? = null, // if available, show instead of text content
     val images: List<String>,
     val toolCallId: String? = null,
     val toolCalls: List<ToolCall> = listOf(),

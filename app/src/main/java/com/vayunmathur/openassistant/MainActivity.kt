@@ -231,10 +231,12 @@ fun ConversationScreen(
                     usedTools = true
                     val action = Tools.getToolAction(it.function.name)
                     if (action != null) {
+                        val result = action(Json.decodeFromString(it.function.arguments), context)
                         val message = Message(
                             conversationId = activeConversation!!.id,
                             role = "tool",
-                            textContent = action(Json.decodeFromString(it.function.arguments), context),
+                            textContent = result.llmResponse,
+                            displayContent = result.userResponse,
                             images = emptyList(),
                             toolCallId = it.id,
                         )
@@ -460,15 +462,29 @@ fun ConversationScreen(
                                     }
                                 }
 
-                                else -> { // assistant, tool
+                                "assistant" -> {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.Start
                                     ) {
                                         Column(modifier = Modifier.padding(end = 64.dp)) {
                                             MarkdownText(
-                                                markdown = message.textContent,
+                                                markdown = message.displayContent ?: message.textContent,
                                                 style = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onBackground)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                else -> { // tool
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.Start
+                                    ) {
+                                        Column(modifier = Modifier.padding(end = 64.dp)) {
+                                            Text(
+                                                message.displayContent ?: message.textContent,
+                                                style = MaterialTheme.typography.labelSmall
                                             )
                                         }
                                     }

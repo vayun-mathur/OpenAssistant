@@ -3,7 +3,7 @@ package com.vayunmathur.openassistant.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.core.text.util.LocalePreferences
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -14,7 +14,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.double
@@ -22,7 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
-typealias ToolFunctionType = suspend (Map<String, JsonElement>, Context) -> String
+typealias ToolFunctionType = suspend (Map<String, JsonElement>, Context) -> ToolResult
 
 class Tools {
     companion object {
@@ -54,10 +53,11 @@ class Tools {
                 }
 
                 if (latitude == null || longitude == null) {
-                    Json.encodeToString(mapOf("error" to "latitude and longitude parameters are required"))
+                    val response = Json.encodeToString(mapOf("error" to "latitude and longitude parameters are required"))
+                    ToolResult(response, response)
                 } else {
                     try {
-                        client.get("https://api.open-meteo.com/v1/forecast?current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m") {
+                        val weather = client.get("https://api.open-meteo.com/v1/forecast?current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m") {
                             parameter("latitude", latitude.jsonPrimitive.double)
                             parameter("longitude", longitude.jsonPrimitive.double)
                             parameter("temperature_unit", temperatureUnit)
@@ -68,14 +68,17 @@ class Tools {
                                 parameter("wind_speed_unit", "mph")
                                 parameter("precipitation_unit", "inch")
                             }
-                        }.bodyAsText() + ": The user would like their responses using the units requested and returned by the response. Other units may be used in parenthesis."
+                        }.bodyAsText()
+                        ToolResult("$weather: The user would like their responses using the units requested and returned by the response. Other units may be used in parenthesis.", "Got the weather forecast.")
                     } catch (e: Exception) {
-                        Json.encodeToString(mapOf("error" to "Unable to fetch weather data: ${e.message}"))
+                        val response = Json.encodeToString(mapOf("error" to "Unable to fetch weather data: ${e.message}"))
+                        ToolResult(response, response)
                     }
                 }
             },
             ToolSimple("get_local_current_date_time", "Get the current date and time in the local timezone", listOf()) { _, _ ->
-                "${TimeZone.currentSystemDefault()}: ${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())}"
+                val result = "${TimeZone.currentSystemDefault()}: ${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())}"
+                ToolResult(result, "Got the current date and time.")
             },
             ToolSimple("get_list_of_apps", "Get a list of installed apps on the device", listOf()) { _, context ->
                 val pm = context.packageManager
@@ -86,22 +89,24 @@ class Tools {
                         "package_name" to it.packageName
                     )
                 }
-                Json.encodeToString(appInfos)
+                ToolResult(Json.encodeToString(appInfos), "Got the list of installed apps.")
             },
             ToolSimple("open_app", "Open an app given its package id", listOf(
                 stringParam("package_id", "the package id of the app to open")
             )) { args, context ->
                 val packageId = args["package_id"]?.jsonPrimitive?.content
                 if (packageId == null) {
-                    Json.encodeToString(mapOf("error" to "package_id parameter is required"))
+                    val response = Json.encodeToString(mapOf("error" to "package_id parameter is required"))
+                    ToolResult(response, response)
                 } else {
                     val intent = context.packageManager.getLaunchIntentForPackage(packageId)
                     if (intent != null) {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
-                        Json.encodeToString(mapOf("success" to "app opened"))
+                        ToolResult(Json.encodeToString(mapOf("success" to "app opened")), "Opened $packageId")
                     } else {
-                        Json.encodeToString(mapOf("error" to "App not found"))
+                        val response = Json.encodeToString(mapOf("error" to "App not found"))
+                        ToolResult(response, response)
                     }
                 }
             },
@@ -112,18 +117,20 @@ class Tools {
                 val recipient = args["recipient"]?.jsonPrimitive?.content
                 val message = args["message"]?.jsonPrimitive?.content
                 if (recipient == null || message == null) {
-                    Json.encodeToString(mapOf("error" to "recipient and message parameters are required"))
+                    val response = Json.encodeToString(mapOf("error" to "recipient and message parameters are required"))
+                    ToolResult(response, response)
                 } else {
                     try {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("smsto:$recipient")
+                            data = "smsto:$recipient".toUri()
                             putExtra("sms_body", message)
                         }
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
-                        Json.encodeToString(mapOf("success" to "message intent sent"))
+                        ToolResult(Json.encodeToString(mapOf("success" to "message intent sent")), "Opened messaging app to send a message to $recipient.")
                     } catch (e: Exception) {
-                        Json.encodeToString(mapOf("error" to "Could not send message: ${e.message}"))
+                        val response = Json.encodeToString(mapOf("error" to "Could not send message: ${e.message}"))
+                        ToolResult(response, "Could not send message")
                     }
                 }
             },
@@ -132,17 +139,19 @@ class Tools {
             )) { args, context ->
                 val recipient = args["recipient"]?.jsonPrimitive?.content
                 if (recipient == null) {
-                    Json.encodeToString(mapOf("error" to "recipient parameter is required"))
+                    val response = Json.encodeToString(mapOf("error" to "recipient parameter is required"))
+                    ToolResult(response, response)
                 } else {
                     try {
                         val intent = Intent(Intent.ACTION_DIAL).apply {
-                            data = Uri.parse("tel:$recipient")
+                            data = "tel:$recipient".toUri()
                         }
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
-                        Json.encodeToString(mapOf("success" to "dialer opened"))
+                        ToolResult(Json.encodeToString(mapOf("success" to "dialer opened")), "Opened dialer to call $recipient.")
                     } catch (e: Exception) {
-                        Json.encodeToString(mapOf("error" to "Could not open dialer: ${e.message}"))
+                        val response = Json.encodeToString(mapOf("error" to "Could not open dialer: ${e.message}"))
+                        ToolResult(response, "Could not open dialer")
                     }
                 }
             }

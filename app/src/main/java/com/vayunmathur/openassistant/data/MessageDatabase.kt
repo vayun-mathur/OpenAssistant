@@ -9,7 +9,7 @@ import com.vayunmathur.openassistant.data.dao.ConversationDao
 import com.vayunmathur.openassistant.data.dao.MessageDao
 
 @TypeConverters(Converters::class) // Changed to reference the new Converters class
-@Database(entities = [Message::class, Conversation::class], version = 3, exportSchema = false) // Version incremented to 3
+@Database(entities = [Message::class, Conversation::class], version = 4, exportSchema = false) // Version incremented to 3
 abstract class MessageDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun conversationDao(): ConversationDao

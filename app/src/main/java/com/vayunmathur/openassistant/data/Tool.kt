@@ -21,6 +21,8 @@ data class FunctionSpec(
     val parameters: JsonObject
 )
 
+data class ToolResult(val llmResponse: String, val userResponse: String)
+
 data class ToolSimple(
     val name: String,
     val description: String,
