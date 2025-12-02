@@ -3,6 +3,7 @@ package com.vayunmathur.openassistant.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.core.text.util.LocalePreferences
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -53,7 +54,7 @@ class Tools {
                 }
 
                 if (latitude == null || longitude == null) {
-                    "{\"error\": \"latitude and longitude parameters are required\"}"
+                    Json.encodeToString(mapOf("error" to "latitude and longitude parameters are required"))
                 } else {
                     try {
                         client.get("https://api.open-meteo.com/v1/forecast?current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m") {
@@ -69,7 +70,7 @@ class Tools {
                             }
                         }.bodyAsText() + ": The user would like their responses using the units requested and returned by the response. Other units may be used in parenthesis."
                     } catch (e: Exception) {
-                        "{\"error\": \"Unable to fetch weather data: ${e.message}\"}"
+                        Json.encodeToString(mapOf("error" to "Unable to fetch weather data: ${e.message}"))
                     }
                 }
             },
@@ -92,14 +93,56 @@ class Tools {
             )) { args, context ->
                 val packageId = args["package_id"]?.jsonPrimitive?.content
                 if (packageId == null) {
-                    "{\"error\": \"package_id parameter is required\"}"
+                    Json.encodeToString(mapOf("error" to "package_id parameter is required"))
                 } else {
                     val intent = context.packageManager.getLaunchIntentForPackage(packageId)
                     if (intent != null) {
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
-                        "{\"success\": \"app opened\"}"
+                        Json.encodeToString(mapOf("success" to "app opened"))
                     } else {
-                        "{\"error\": \"App not found\"}"
+                        Json.encodeToString(mapOf("error" to "App not found"))
+                    }
+                }
+            },
+            ToolSimple("send_message", "Send a message to a recipient", listOf(
+                stringParam("recipient", "the phone number of the recipient"),
+                stringParam("message", "the content of the message")
+            )) { args, context ->
+                val recipient = args["recipient"]?.jsonPrimitive?.content
+                val message = args["message"]?.jsonPrimitive?.content
+                if (recipient == null || message == null) {
+                    Json.encodeToString(mapOf("error" to "recipient and message parameters are required"))
+                } else {
+                    try {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("smsto:$recipient")
+                            putExtra("sms_body", message)
+                        }
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        Json.encodeToString(mapOf("success" to "message intent sent"))
+                    } catch (e: Exception) {
+                        Json.encodeToString(mapOf("error" to "Could not send message: ${e.message}"))
+                    }
+                }
+            },
+            ToolSimple("make_phone_call", "Make a phone call to a recipient", listOf(
+                stringParam("recipient", "the phone number of the recipient")
+            )) { args, context ->
+                val recipient = args["recipient"]?.jsonPrimitive?.content
+                if (recipient == null) {
+                    Json.encodeToString(mapOf("error" to "recipient parameter is required"))
+                } else {
+                    try {
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                            data = Uri.parse("tel:$recipient")
+                        }
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        Json.encodeToString(mapOf("success" to "dialer opened"))
+                    } catch (e: Exception) {
+                        Json.encodeToString(mapOf("error" to "Could not open dialer: ${e.message}"))
                     }
                 }
             }
