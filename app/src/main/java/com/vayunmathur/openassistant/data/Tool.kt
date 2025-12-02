@@ -63,3 +63,7 @@ data class ToolSimple(
 fun stringParam(name: String, description: String, required: Boolean = true): ToolSimple.Parameter {
     return ToolSimple.Parameter(name, "string", description, required)
 }
+
+fun numberParam(name: String, description: String, required: Boolean = true): ToolSimple.Parameter {
+    return ToolSimple.Parameter(name, "number", description, required)
+}

@@ -234,7 +234,7 @@ fun ConversationScreen(
                         val message = Message(
                             conversationId = activeConversation!!.id,
                             role = "tool",
-                            textContent = action(Json.decodeFromString(it.function.arguments)),
+                            textContent = action(Json.decodeFromString(it.function.arguments), context),
                             images = emptyList(),
                             toolCallId = it.id,
                         )
@@ -388,7 +388,7 @@ fun ConversationScreen(
                         )
                     }
                 }
-            }
+            },
         ) { innerPadding ->
             Column(
                 modifier = Modifier
