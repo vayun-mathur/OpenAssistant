@@ -1,8 +1,8 @@
 package com.vayunmathur.openassistant.data
 
 import android.content.Context
-import android.icu.util.LocaleData
-import android.icu.util.ULocale
+import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.text.util.LocalePreferences
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -13,6 +13,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonPrimitive
@@ -74,6 +76,33 @@ class Tools {
             ToolSimple("get_local_current_date_time", "Get the current date and time in the local timezone", listOf()) { _, _ ->
                 "${TimeZone.currentSystemDefault()}: ${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())}"
             },
+            ToolSimple("get_list_of_apps", "Get a list of installed apps on the device", listOf()) { _, context ->
+                val pm = context.packageManager
+                val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                val appInfos = apps.map {
+                    mapOf(
+                        "name" to it.loadLabel(pm).toString(),
+                        "package_name" to it.packageName
+                    )
+                }
+                Json.encodeToString(appInfos)
+            },
+            ToolSimple("open_app", "Open an app given its package id", listOf(
+                stringParam("package_id", "the package id of the app to open")
+            )) { args, context ->
+                val packageId = args["package_id"]?.jsonPrimitive?.content
+                if (packageId == null) {
+                    "{\"error\": \"package_id parameter is required\"}"
+                } else {
+                    val intent = context.packageManager.getLaunchIntentForPackage(packageId)
+                    if (intent != null) {
+                        context.startActivity(intent)
+                        "{\"success\": \"app opened\"}"
+                    } else {
+                        "{\"error\": \"App not found\"}"
+                    }
+                }
+            }
         )
 
         val API_TOOLS = ALL_TOOLS.map { it.toTool() }
