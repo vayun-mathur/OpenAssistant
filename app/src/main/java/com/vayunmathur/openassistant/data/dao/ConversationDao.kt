@@ -16,6 +16,9 @@ interface ConversationDao {
     @Delete
     suspend fun delete(conversation: Conversation)
 
+    @Query("DELETE FROM conversations WHERE id = :conversationId")
+    suspend fun delete(conversationId: Long)
+
     @Query("SELECT * FROM conversations ORDER BY createdAt DESC")
     fun getAllConversations(): Flow<List<Conversation>>
 }
