@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,9 +26,20 @@ import com.vayunmathur.openassistant.data.dao.ConversationDao
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListScreen(conversationDao: ConversationDao, selectedConversation: Long?, onConversationSelected: (Long) -> Unit) {
+fun ListScreen(conversationDao: ConversationDao, isDetailPlaceholder: Boolean, selectedConversation: Long?, newConversation: () -> Unit, onConversationSelected: (Long) -> Unit) {
     val conversations by conversationDao.getAllConversations().collectAsState(listOf())
-    Scaffold(contentWindowInsets = WindowInsets()) { paddingValues ->
+    Scaffold(
+        topBar = {
+            TopAppBar({Text("Conversations")})
+        },
+        floatingActionButton = {
+            if(!isDetailPlaceholder && selectedConversation == null) {
+                FloatingActionButton(onClick = { newConversation() }) {
+                    Icon(painterResource(R.drawable.baseline_add_24), contentDescription = "New Conversation")
+                }
+            }
+        }
+    ) { paddingValues ->
         LazyColumn(Modifier.padding(paddingValues).fillMaxSize(), contentPadding = PaddingValues(horizontal = 8.dp)) {
             items(conversations) { conversation ->
                 NavigationDrawerItem(

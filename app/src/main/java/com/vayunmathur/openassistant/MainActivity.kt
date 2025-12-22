@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -116,6 +118,7 @@ fun Navigation(database: MessageDatabase, finish: () -> Unit) {
     }
 
     var isDetailPlaceholder by remember { mutableStateOf(false) }
+    var isListShown by remember { mutableStateOf(false) }
 
     val selectedConversation = when(backStack.lastOrNull()) {
         is ChatPage -> (backStack.lastOrNull() as ChatPage).conversationId
@@ -123,60 +126,13 @@ fun Navigation(database: MessageDatabase, finish: () -> Unit) {
         else -> if(isDetailPlaceholder) 0 else null
     }
 
-    Scaffold(topBar = {
-        TopAppBar({Text(
-            when(backStack.last()) {
-                is ChatPage -> conversations.firstOrNull{it.id == (backStack.lastOrNull() as ChatPage).conversationId }?.title?:""
-                is NewChatPage -> "New Conversation"
-                else -> "Conversations"
-            }
-        )}, navigationIcon = {
-            if(backStack.last() is ChatPage || (backStack.last() is NewChatPage && backStack.first() is ListPage)) {
-                IconButton(onClick = { backStack.removeAt(backStack.lastIndex) }) {
-                    Icon(
-                        painterResource(R.drawable.arrow_back_24px),
-                        contentDescription = "Back"
-                    )
-                }
-            }
-        }, actions = {
-            if(backStack.isEmpty()) return@TopAppBar
-            Row {
-                if(backStack.last() !is NewChatPage) {
-                    IconButton(onClick = {
-                        backStack.add(NewChatPage)
-                    }) {
-                        Icon(
-                            painterResource(R.drawable.baseline_add_24),
-                            contentDescription = "New Conversation"
-                        )
-                    }
-                }
-                if(backStack.last() is ChatPage) {
-                    IconButton(onClick = { backStack.removeAt(backStack.lastIndex) }) {
-                        Icon(
-                            painterResource(R.drawable.baseline_delete_24),
-                            contentDescription = "Delete Conversation"
-                        )
-                    }
-                }
-                IconButton(onClick = {
-                    backStack.add(APIKeyPopup)
-                }) {
-                    Icon(
-                        painterResource(R.drawable.baseline_settings_24),
-                        contentDescription = "Settings"
-                    )
-                }
-            }
-        })
-    }) { paddingValues ->
+    Scaffold(contentWindowInsets = WindowInsets.displayCutout) { paddingValues ->
         if(backStack.isEmpty()) {
             return@Scaffold
         }
         NavDisplay(
             backStack,
-            Modifier.padding(paddingValues),
+            Modifier.padding(paddingValues).consumeWindowInsets(paddingValues),
             onBack = { if(backStack.size == 1 && backStack.first() is NewChatPage) finish() else backStack.removeAt(backStack.lastIndex) },
             sceneStrategy = dialogStrategy.then(listDetailStrategy),
             entryProvider = entryProvider {
@@ -187,9 +143,17 @@ fun Navigation(database: MessageDatabase, finish: () -> Unit) {
                             isDetailPlaceholder = false
                         }
                     }
-                    ChatScreen(conversationDao, messageDao, null, { }, {backStack.add(APIKeyPopup)}, grokApi, null)
+                    ChatScreen(conversationDao, messageDao, null, { backStack.add(ChatPage(it)) }, {backStack.add(APIKeyPopup)}, grokApi, {}, {}, null)
                 })){
-                    ListScreen(conversationDao, selectedConversation,{
+                    DisposableEffect(Unit) {
+                        isListShown = true
+                        onDispose {
+                            isListShown = false
+                        }
+                    }
+                    ListScreen(conversationDao, isDetailPlaceholder, selectedConversation, {
+                        backStack.add(NewChatPage)
+                    },{
                         if (backStack.last() is ChatPage || backStack.last() is NewChatPage) {
                             backStack[backStack.lastIndex] = ChatPage(it)
                         } else {
@@ -198,8 +162,11 @@ fun Navigation(database: MessageDatabase, finish: () -> Unit) {
                     })
                 }
                 entry<NewChatPage>(metadata = ListDetailSceneStrategy.detailPane()) {
-                    ChatScreen(conversationDao, messageDao, null, { }, {backStack.add(APIKeyPopup)}, grokApi,
-                        if(backStack.size == 1 && backStack.first() is NewChatPage) null else {
+                    ChatScreen(conversationDao, messageDao, null, {
+                        backStack[backStack.lastIndex] = ChatPage(it)
+                    }, {backStack.add(APIKeyPopup)}, grokApi,
+                        {}, {},
+                        if(isListShown) null else if(backStack.size == 1 && backStack.first() is NewChatPage) null else {
                             { backStack.removeAt(backStack.lastIndex) }
                         }
                     )
@@ -207,7 +174,10 @@ fun Navigation(database: MessageDatabase, finish: () -> Unit) {
                 entry<ChatPage>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                     ChatScreen(conversationDao, messageDao, key.conversationId, {
                         backStack[backStack.lastIndex] = NewChatPage
-                    }, {backStack.add(APIKeyPopup)}, grokApi, {backStack.removeAt(backStack.lastIndex)})
+                    }, {backStack.add(APIKeyPopup)}, grokApi, {backStack[backStack.lastIndex] = NewChatPage}, {
+                        coroutineScope.launch { conversationDao.delete(key.conversationId) }
+                        backStack.removeAt(backStack.lastIndex)
+                    }, if(isListShown) null else {{backStack.removeAt(backStack.lastIndex)}})
                 }
                 entry<APIKeyPopup>(metadata = DialogSceneStrategy.dialog()) {
                     Card {

@@ -80,6 +80,8 @@ fun ChatScreen(
     moveTo: (Long) -> Unit,
     openApiKeyDialog: () -> Unit,
     grokApi: GrokApi,
+    newConversation: () -> Unit,
+    deleteConversation: () -> Unit,
     back: (() -> Unit)?,
 ) {
     val context = LocalContext.current
@@ -246,22 +248,50 @@ fun ChatScreen(
             }
         }
     }
-    Scaffold(contentWindowInsets = WindowInsets(),
-//        topBar = {
-//            TopAppBar(
-//                title = { Text(currentConversation?.title ?: "New Conversation") },
-//                navigationIcon = {
-//                    if(back != null) {
-//                        IconButton(onClick = { coroutineScope.launch { back() } }) {
-//                            Icon(
-//                                painterResource(R.drawable.arrow_back_24px),
-//                                contentDescription = "Menu"
-//                            )
-//                        }
-//                    }
-//                }
-//            )
-//        },
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(currentConversation?.title ?: "New Conversation") },
+                navigationIcon = {
+                    if(back != null) {
+                        IconButton(onClick = { coroutineScope.launch { back() } }) {
+                            Icon(
+                                painterResource(R.drawable.arrow_back_24px),
+                                contentDescription = "Menu"
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    if(conversationID != null) {
+                        IconButton(onClick = {
+                            newConversation()
+                        }) {
+                            Icon(
+                                painterResource(R.drawable.baseline_add_24),
+                                contentDescription = "New Conversation"
+                            )
+                        }
+                        IconButton(onClick = {
+                            deleteConversation()
+                        }) {
+                            Icon(
+                                painterResource(R.drawable.baseline_delete_24),
+                                contentDescription = "Delete Conversation"
+                            )
+                        }
+                    }
+                    IconButton(onClick = {
+                        openApiKeyDialog()
+                    }) {
+                        Icon(
+                            painterResource(R.drawable.baseline_settings_24),
+                            contentDescription = "Settings"
+                        )
+                    }
+                }
+            )
+        },
         bottomBar = {
             BottomAppBar {
                 Column {
